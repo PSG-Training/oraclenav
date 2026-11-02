@@ -73,6 +73,9 @@
     padding:10px 12px;font-size:15px;line-height:1.45;}
   .feedback.show{display:block;}
   .feedback .verdict{font-family:var(--font-head);font-weight:700;color:var(--incorrect);display:block;margin-bottom:3px;}
+  .nextline{display:block;margin-top:10px;padding-top:8px;border-top:1px solid var(--card-gray);font-size:.92em;color:var(--psg-blue);}
+  .feedback.note{border-left-color:var(--psg-blue);}
+  .feedback.note .verdict{color:var(--psg-blue);}
   .btns{display:flex;gap:8px;flex-wrap:wrap;}
   button.btn{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--white);background:var(--psg-blue);
     border:none;border-radius:6px;padding:9px 16px;cursor:pointer;}
@@ -309,7 +312,8 @@ const STEPS = {
       EDGE_BANNER],
     miss:"The Password box is the second white box, just under the one with your username."},
 
-  typepw:{img:"login_pw",num:9,kind:"type",field:[301,246,507,267],answer:"password",secret:true,
+  typepw:{img:"login_pw",num:9,kind:"type",field:[301,246,507,267],answer:"password",secret:true,caseSensitive:true,
+    caseMiss:"Check your capital letters. Passwords are case sensitive, so <b>Password</b> and <b>password</b> are different. Type <b>password</b>, all lowercase.",
     instr:"Type your password. For this practice, type <b>password</b> and press Enter.",
     next:"loginbtn",ok:"Password entered. Your real password comes from IT. Never share it or write it down where others can see it.",
     miss:"Type the word <b>password</b>, all lowercase. The dots hide what you type, so type carefully."},
@@ -371,7 +375,7 @@ const STEPS = {
     miss:"The compass is a small round icon in the toolbar, third from the left, right under the word View."},
 
   navigator:{img:"navigator",num:18,kind:"info",next:"END",
-    instr:"The Navigator opens on top of your other screens. Use it any time to open a different screen. This is the end of the simulation."}
+    instr:"The Navigator opens on top of your other screens. Use it any time to open a different screen. That's the last step of the simulation."}
 };
 const MISS_VERDICTS = ["Not quite.", "Not that one.", "Close, but not yet.", "Try a different spot."];
 /* ================================================================
@@ -419,7 +423,10 @@ const MISS_VERDICTS = ["Not quite.", "Not that one.", "Close, but not yet.", "Tr
     });
     shot.src=IMAGES[st.img]; shot.alt="Screenshot for step "+st.num;
     $("steplabel").textContent="Step "+st.num;
-    instr.innerHTML=st.instr;
+    instr.innerHTML = st.kind==="info"
+      ? st.instr + '<span class="nextline">Nothing to click on the screen here. Click <b>' + (st.next==="END" ? "Finish</b> to wrap up." : "Continue</b> to keep going.") + '</span>'
+      : st.instr;
+    cont.textContent = st.next==="END" ? "Finish" : "Continue";
     setStepInfo(st.num);
     hideFeedback();
     if(okText){ okBox.innerHTML="<b>Nice work.</b>"+okText; okBox.classList.add("show"); }
@@ -433,8 +440,9 @@ const MISS_VERDICTS = ["Not quite.", "Not that one.", "Close, but not yet.", "Tr
     if(st.kind==="info") cont.focus({preventScroll:true});
   }
 
-  function hideFeedback(){ fb.classList.remove("show"); }
+  function hideFeedback(){ fb.classList.remove("show","note"); }
   function miss(text){
+    fb.classList.remove("note");
     verdict.textContent = MISS_VERDICTS[missCount % MISS_VERDICTS.length];
     explain.innerHTML = " " + text;
     fb.classList.add("show");
@@ -445,7 +453,13 @@ const MISS_VERDICTS = ["Not quite.", "Not that one.", "Close, but not yet.", "Tr
   function inRect(x,y,r){ return x>=r[0] && x<=r[2] && y>=r[1] && y<=r[3]; }
 
   screen.addEventListener("click", function(e){
-    const st=STEPS[cur]; if(!st || st.kind!=="click" || busy) return;
+    const st=STEPS[cur]; if(!st || busy) return;
+    if(st.kind==="info"){
+      verdict.textContent="Nothing to click here.";
+      explain.innerHTML=" This screen just shows what happens next. Click the <b>"+cont.textContent+"</b> button to move on.";
+      fb.classList.add("show","note"); cont.focus({preventScroll:true}); return;
+    }
+    if(st.kind!=="click") return;
     const b=screen.getBoundingClientRect();
     const x=(e.clientX-b.left)/b.width*800, y=(e.clientY-b.top)/b.height*600;
     clearMarks();
@@ -489,8 +503,15 @@ const MISS_VERDICTS = ["Not quite.", "Not that one.", "Close, but not yet.", "Tr
   function removeInput(){ if(typeInput){ typeInput.remove(); typeInput=null; } }
   function checkTyped(){
     const st=STEPS[cur]; if(!typeInput || busy) return;
-    if(typeInput.value.trim().toLowerCase()===st.answer){ busy=true; hideFeedback(); go(st.next, st.ok); }
-    else { miss(st.miss); typeInput.select(); typeInput.focus({preventScroll:true}); }
+    const typed = st.caseSensitive ? typeInput.value : typeInput.value.trim().toLowerCase();
+    if(typed===st.answer){ busy=true; hideFeedback(); go(st.next, st.ok); return; }
+    if(st.caseSensitive && typeInput.value!==typeInput.value.trim() && typeInput.value.trim()===st.answer){
+      miss("There's an extra space in what you typed. Passwords count spaces too. Type <b>"+st.answer+"</b> with no spaces.");
+      typeInput.select(); typeInput.focus({preventScroll:true}); return;
+    }
+    const caseOnly = st.caseSensitive && st.caseMiss && typeInput.value.trim().toLowerCase()===st.answer.toLowerCase();
+    miss(caseOnly ? st.caseMiss : st.miss);
+    typeInput.select(); typeInput.focus({preventScroll:true});
   }
   submit.addEventListener("click", checkTyped);
 
